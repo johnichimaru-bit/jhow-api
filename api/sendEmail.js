@@ -1,36 +1,57 @@
-import { Resend } from 'resend';
+// api/sendEmail.js
+import { Resend } from "resend";
+
+const resend = new Resend(process.env.RESEND_API_KEY);
+
+// Helper de CORS
+function applyCors(req, res) {
+  const origin = req.headers.origin || "*";
+
+  // Se quiser travar em origens específicas, dá pra trocar o "*" por uma lista
+  // ex: ["http://127.0.0.1:5500", "https://seu-site.web.app"]
+  res.setHeader("Access-Control-Allow-Origin", origin);
+  res.setHeader("Vary", "Origin");
+  res.setHeader("Access-Control-Allow-Methods", "POST,OPTIONS");
+  res.setHeader("Access-Control-Allow-Headers", "Content-Type");
+}
 
 export default async function handler(req, res) {
-  if (req.method !== 'POST') {
-    return res.status(405).json({ error: 'Método não permitido' });
+  applyCors(req, res);
+
+  // Responde o preflight (OPTIONS) do navegador
+  if (req.method === "OPTIONS") {
+    return res.status(200).end();
   }
 
-  const { nome, telefone, data, horario, servico } = req.body;
-
-  if (!nome || !telefone || !data || !horario || !servico) {
-    return res.status(400).json({ error: 'Dados incompletos' });
+  if (req.method !== "POST") {
+    return res.status(405).json({ error: "Method not allowed" });
   }
 
   try {
-    const resend = new Resend(process.env.RESEND_API_KEY);
+    const { to, subject, html } = req.body || {};
 
-    await resend.emails.send({
-      from: 'Agendamentos <onboarding@resend.dev>',
-      to: 'johnkevindacruz3@gmail.com',
-      subject: 'Novo Agendamento Recebido!',
-      html: `
-        <h2>📅 Novo Agendamento</h2>
-        <p><strong>Cliente:</strong> ${nome}</p>
-        <p><strong>Telefone:</strong> ${telefone}</p>
-        <p><strong>Data:</strong> ${data}</p>
-        <p><strong>Horário:</strong> ${horario}</p>
-        <p><strong>Serviço:</strong> ${servico}</p>
-      `
+    if (!to || !subject || !html) {
+      return res.status(400).json({
+        error: "Campos obrigatórios: to, subject, html",
+      });
+    }
+
+    const data = await resend.emails.send({
+      from: "Agendamentos Jhow Cortes <onboarding@resend.dev>",
+      to,
+      subject,
+      html,
     });
 
-    return res.status(200).json({ success: true, message: 'Email enviado!' });
+    return res.status(200).json({
+      success: true,
+      id: data?.id || null,
+    });
   } catch (error) {
-    console.error('Erro ao enviar email:', error);
-    return res.status(500).json({ error: 'Erro interno ao enviar email' });
+    console.error("Erro ao enviar e-mail:", error);
+    return res.status(500).json({
+      error: "Erro ao enviar e-mail",
+      details: error?.message || String(error),
+    });
   }
 }
