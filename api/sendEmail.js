@@ -13,8 +13,14 @@ export default async function handler(req, res) {
 
   // Domínios de produção (SEM barra no final!)
   const allowedProdOrigins = [
+    // Painel/admin
     "https://barbearia-john.web.app",
-    "https://barbearia-john.firebaseapp.com", // alias do Firebase, se usar
+    "https://barbearia-john.firebaseapp.com",
+
+    // Site público + agenda online
+    "https://jhowcortesofc.web.app",
+    "https://jhowcortesofc.firebaseapp.com",
+    "https://jhowcortes.com.br",
   ];
 
   if (isLocalhost || allowedProdOrigins.includes(origin)) {
