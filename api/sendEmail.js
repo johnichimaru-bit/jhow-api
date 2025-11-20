@@ -11,17 +11,17 @@ export default async function handler(req, res) {
     origin.startsWith("http://localhost") ||
     origin.startsWith("http://127.0.0.1");
 
-  // Coloque aqui os domínios de produção quando tiver
+  // Domínios de produção (SEM barra no final!)
   const allowedProdOrigins = [
-    // "https://seu-dominio.web.app",
-    // "https://seu-dominio.firebaseapp.com",
+    "https://barbearia-john.web.app",
+    "https://barbearia-john.firebaseapp.com", // alias do Firebase, se usar
   ];
 
   if (isLocalhost || allowedProdOrigins.includes(origin)) {
     // libera exatamente o origin da requisição
     res.setHeader("Access-Control-Allow-Origin", origin);
   } else if (allowedProdOrigins.length > 0) {
-    // fallback: primeiro domínio de produção, se existir
+    // fallback: primeiro domínio de produção, se o origin vier vazio ou estranho
     res.setHeader("Access-Control-Allow-Origin", allowedProdOrigins[0]);
   } else {
     // fallback bem aberto (só enquanto não tem domínio de prod configurado)
