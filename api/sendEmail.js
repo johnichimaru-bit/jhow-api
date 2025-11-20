@@ -1,25 +1,37 @@
 // api/sendEmail.js
 
 export default async function handler(req, res) {
-  // ----- CORS -----
-  const allowedOrigins = [
-    "http://127.0.0.1:5500",
-    "http://localhost:5500",
-    // quando for rodar em produção, adicione aqui o domínio do seu site, por ex.:
-    // "https://SEU-DOMINIO.web.app",
-    // "https://SEU-DOMINIO.firebaseapp.com",
+  // ==========================
+  // CORS
+  // ==========================
+  const origin = req.headers.origin || "";
+
+  // Qualquer porta de localhost / 127.0.0.1
+  const isLocalhost =
+    origin.startsWith("http://localhost") ||
+    origin.startsWith("http://127.0.0.1");
+
+  // Coloque aqui os domínios de produção quando tiver
+  const allowedProdOrigins = [
+    // "https://seu-dominio.web.app",
+    // "https://seu-dominio.firebaseapp.com",
   ];
 
-  const origin = req.headers.origin;
-  const corsOrigin = allowedOrigins.includes(origin)
-    ? origin
-    : allowedOrigins[0];
+  if (isLocalhost || allowedProdOrigins.includes(origin)) {
+    // libera exatamente o origin da requisição
+    res.setHeader("Access-Control-Allow-Origin", origin);
+  } else if (allowedProdOrigins.length > 0) {
+    // fallback: primeiro domínio de produção, se existir
+    res.setHeader("Access-Control-Allow-Origin", allowedProdOrigins[0]);
+  } else {
+    // fallback bem aberto (só enquanto não tem domínio de prod configurado)
+    res.setHeader("Access-Control-Allow-Origin", "*");
+  }
 
-  res.setHeader("Access-Control-Allow-Origin", corsOrigin);
   res.setHeader("Access-Control-Allow-Methods", "POST, OPTIONS");
   res.setHeader("Access-Control-Allow-Headers", "Content-Type");
 
-  // Responde o preflight
+  // Preflight
   if (req.method === "OPTIONS") {
     return res.status(200).end();
   }
@@ -29,25 +41,42 @@ export default async function handler(req, res) {
   }
 
   try {
-    // ----- LER BODY (como JSON) -----
-    let rawBody = "";
-    for await (const chunk of req) {
-      rawBody += chunk;
-    }
+    // ==========================
+    // LER BODY (JSON)
+    // ==========================
+    let data = {};
 
-    const data = JSON.parse(rawBody || "{}");
+    // Se o body já veio parseado (Next pode fazer isso)
+    if (req.body && Object.keys(req.body).length > 0) {
+      data = req.body;
+    } else {
+      let rawBody = "";
+      for await (const chunk of req) {
+        rawBody += chunk;
+      }
+      if (rawBody) {
+        data = JSON.parse(rawBody);
+      }
+    }
 
     const {
       nomeCliente,
       telefoneCliente,
+      telefone,              // vem do front como "telefone"
       data: dataAgendada,
       horario,
       servico,
       pagamento,
       valorTotal,
+      adicionais,
+      comentario,
     } = data;
 
-    // ----- CHAVE DA RESEND -----
+    const telefoneFinal = telefoneCliente || telefone || "-";
+
+    // ==========================
+    // CHAVE DA RESEND
+    // ==========================
     const RESEND_API_KEY = process.env.RESEND_API_KEY;
     if (!RESEND_API_KEY) {
       console.error("RESEND_API_KEY não configurada na Vercel");
@@ -56,22 +85,59 @@ export default async function handler(req, res) {
         .json({ error: "Configuração de e-mail ausente no servidor." });
     }
 
-    // ----- CONTEÚDO DO E-MAIL -----
+    // ==========================
+    // FORMATAÇÕES
+    // ==========================
     const valorFormatado =
       typeof valorTotal === "number"
         ? valorTotal.toFixed(2).replace(".", ",")
         : valorTotal || "0,00";
 
+    let dataFormatada = dataAgendada || "-";
+    if (
+      typeof dataAgendada === "string" &&
+      /^\d{4}-\d{2}-\d{2}$/.test(dataAgendada)
+    ) {
+      const [ano, mes, dia] = dataAgendada.split("-");
+      dataFormatada = `${dia}/${mes}/${ano}`;
+    }
+
+    const adicionaisTexto =
+      Array.isArray(adicionais) && adicionais.length
+        ? `<p><strong>Adicionais:</strong> ${adicionais.join(", ")}</p>`
+        : "";
+
+    const comentarioTexto = comentario
+      ? `<p><strong>Comentário do cliente:</strong> ${comentario}</p>`
+      : "";
+
+    // ==========================
+    // HTML DO E-MAIL
+    // ==========================
     const html = `
-      <h2>Novo agendamento na agenda online</h2>
-      <p><strong>Cliente:</strong> ${nomeCliente || "-"} (${telefoneCliente || "-"})</p>
-      <p><strong>Data:</strong> ${dataAgendada || "-"} às ${horario || "-"}</p>
-      <p><strong>Serviço:</strong> ${servico || "-"}</p>
-      <p><strong>Pagamento:</strong> ${pagamento || "-"}</p>
-      <p><strong>Valor total:</strong> R$ ${valorFormatado}</p>
+      <div style="font-family: Arial, sans-serif; font-size: 14px; color: #222;">
+        <h2 style="margin-bottom: 10px;">Novo agendamento na agenda online</h2>
+
+        <p><strong>Cliente:</strong> ${nomeCliente || "-"} (${telefoneFinal})</p>
+        <p><strong>Data:</strong> ${dataFormatada} às ${horario || "-"}</p>
+        <p><strong>Serviço:</strong> ${servico || "-"}</p>
+        ${adicionaisTexto}
+        <p><strong>Forma de pagamento:</strong> ${pagamento || "-"}</p>
+        <p><strong>Valor total:</strong> R$ ${valorFormatado}</p>
+        ${comentarioTexto}
+
+        <hr style="margin: 20px 0; border: none; border-top: 1px solid #eee;" />
+
+        <p style="font-size: 12px; color: #777;">
+          Este e-mail foi gerado automaticamente pela agenda online da
+          <strong>Barbearia Jhow Cortes</strong>.
+        </p>
+      </div>
     `;
 
-    // ----- CHAMADA HTTP PARA A RESEND (sem SDK) -----
+    // ==========================
+    // CHAMADA HTTP PARA A RESEND
+    // ==========================
     const response = await fetch("https://api.resend.com/emails", {
       method: "POST",
       headers: {
@@ -79,9 +145,8 @@ export default async function handler(req, res) {
         "Content-Type": "application/json",
       },
       body: JSON.stringify({
-        // endereço de teste permitido pela Resend
-        from: "Jhow Cortes <onboarding@resend.dev>",
-        to: ["johnkevindacruz3@gmail.com"], // <-- pra onde vai chegar o aviso
+        from: "Jhow Cortes <onboarding@resend.dev>", // remetente de teste da Resend
+        to: ["johnkevindacruz3@gmail.com"],          // destino: seu e-mail
         subject: "Novo agendamento - Barbearia Jhow Cortes",
         html,
       }),
