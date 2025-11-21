@@ -152,7 +152,7 @@ export default async function handler(req, res) {
       },
       body: JSON.stringify({
         from: "Jhow Cortes <onboarding@resend.dev>", // remetente de teste da Resend
-        to: ["johnkevindacruz3@gmail.com"],          // destino: seu e-mail
+        to: ["jhoventura20@gmail.com"],              // destino: e-mail do barbeiro
         subject: "Novo agendamento - Barbearia Jhow Cortes",
         html,
       }),
