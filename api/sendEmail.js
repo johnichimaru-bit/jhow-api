@@ -6,12 +6,10 @@ export default async function handler(req, res) {
   // ==========================
   const origin = req.headers.origin || "";
 
-  // Qualquer porta de localhost / 127.0.0.1
   const isLocalhost =
     origin.startsWith("http://localhost") ||
     origin.startsWith("http://127.0.0.1");
 
-  // Domínios de produção (SEM barra no final!)
   const allowedProdOrigins = [
     // Painel/admin
     "https://barbearia-john.web.app",
@@ -24,20 +22,16 @@ export default async function handler(req, res) {
   ];
 
   if (isLocalhost || allowedProdOrigins.includes(origin)) {
-    // libera exatamente o origin da requisição
     res.setHeader("Access-Control-Allow-Origin", origin);
   } else if (allowedProdOrigins.length > 0) {
-    // fallback: primeiro domínio de produção, se o origin vier vazio ou estranho
     res.setHeader("Access-Control-Allow-Origin", allowedProdOrigins[0]);
   } else {
-    // fallback bem aberto (só enquanto não tem domínio de prod configurado)
     res.setHeader("Access-Control-Allow-Origin", "*");
   }
 
   res.setHeader("Access-Control-Allow-Methods", "POST, OPTIONS");
   res.setHeader("Access-Control-Allow-Headers", "Content-Type");
 
-  // Preflight
   if (req.method === "OPTIONS") {
     return res.status(200).end();
   }
@@ -52,7 +46,6 @@ export default async function handler(req, res) {
     // ==========================
     let data = {};
 
-    // Se o body já veio parseado (Next pode fazer isso)
     if (req.body && Object.keys(req.body).length > 0) {
       data = req.body;
     } else {
@@ -68,7 +61,7 @@ export default async function handler(req, res) {
     const {
       nomeCliente,
       telefoneCliente,
-      telefone,              // vem do front como "telefone"
+      telefone, // fallback
       data: dataAgendada,
       horario,
       servico,
@@ -117,9 +110,6 @@ export default async function handler(req, res) {
       ? `<p><strong>Comentário do cliente:</strong> ${comentario}</p>`
       : "";
 
-    // ==========================
-    // HTML DO E-MAIL
-    // ==========================
     const html = `
       <div style="font-family: Arial, sans-serif; font-size: 14px; color: #222;">
         <h2 style="margin-bottom: 10px;">Novo agendamento na agenda online</h2>
@@ -142,7 +132,7 @@ export default async function handler(req, res) {
     `;
 
     // ==========================
-    // CHAMADA HTTP PARA A RESEND
+    // ENVIO VIA RESEND (DOMÍNIO VERIFICADO)
     // ==========================
     const response = await fetch("https://api.resend.com/emails", {
       method: "POST",
@@ -151,8 +141,8 @@ export default async function handler(req, res) {
         "Content-Type": "application/json",
       },
       body: JSON.stringify({
-        from: "Jhow Cortes <onboarding@resend.dev>", // remetente de teste da Resend
-        to: ["jhoventura20@gmail.com"],              // destino: e-mail do barbeiro
+        from: "Barbearia Jhow Cortes <agendamentos@jhowcortes.com.br>", 
+        to: ["jhoventura20@gmail.com"],
         subject: "Novo agendamento - Barbearia Jhow Cortes",
         html,
       }),
